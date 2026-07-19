@@ -1,5 +1,5 @@
 {
-  "description": "异动雷达微信小程序 UI MVP",
+  "description": "异动偏离预警器微信小程序 MVP",
   "packOptions": {
     "ignore": [],
     "include": []
@@ -39,8 +39,8 @@
   },
   "compileType": "miniprogram",
   "libVersion": "trial",
-  "appid": "wx2a9d84245014be9a",
-  "projectname": "yidong-radar",
+  "appid": "wxf3710b03abc8aaaa",
+  "projectname": "yidong-deviation-alert",
   "condition": {},
   "simulatorPluginLibVersion": {},
   "editorSetting": {}

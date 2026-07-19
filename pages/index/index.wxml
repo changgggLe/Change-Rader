@@ -3,20 +3,17 @@
     <view class="page-header">
       <view>
         <text class="eyebrow">股票异动监测</text>
-        <view class="page-title">异动雷达</view>
+        <view class="page-title">异动偏离预警器</view>
       </view>
       <text class="badge badge-muted">{{dataSourceLabel}}</text>
     </view>
 
     <view class="card market-card">
       <view class="row-between">
-        <view class="live-state"><text class="live-dot"></text><text>{{marketState}}</text></view>
-        <text class="muted small">{{refreshLabel}}</text>
+        <view class="live-state"><text class="live-dot {{marketStatus === 'TRADING' ? '' : 'closed'}}"></text><text>{{marketState}}</text></view>
+        <text class="muted small">{{refreshing ? '更新中…' : refreshLabel}}</text>
       </view>
-      <view class="mode-switch" role="group" aria-label="行情时段">
-        <button class="mode-button {{mode === 'intraday' ? 'active' : ''}}" data-mode="intraday" bindtap="onModeTap">盘中</button>
-        <button class="mode-button {{mode === 'after' ? 'active' : ''}}" data-mode="after" bindtap="onModeTap">盘后</button>
-      </view>
+      <view class="muted small paragraph">状态由北京时间自动判断，不支持手动切换</view>
     </view>
 
     <view class="summary-grid">
@@ -26,12 +23,12 @@
     </view>
 
     <view class="section-header">
-      <text class="section-title">全市场动态</text>
-      <text class="muted small">10–15 秒刷新</text>
+      <text class="section-title">{{marketSectionTitle}}</text>
+      <text class="muted small">{{marketSectionHint}}</text>
     </view>
 
     <view wx:if="{{loading}}" class="card state-card">
-      <view class="section-title">正在读取后端 Mock 数据</view>
+      <view class="section-title">正在读取行情数据</view>
       <view class="muted small top-gap">请求 /market/status 和 /anomalies 接口</view>
     </view>
 
@@ -107,8 +104,30 @@
 
   <view wx:elif="{{view === 'watch'}}" class="screen">
     <view class="page-header"><view><text class="eyebrow">重点跟踪</text><view class="page-title">我的自选</view></view><text class="badge badge-muted">{{watchlistStocks.length}} 只</text></view>
+    <view class="card watch-add-card">
+      <view class="section-title">添加自选股</view>
+      <view class="watch-add-form">
+        <input
+          class="watch-input"
+          type="number"
+          maxlength="6"
+          value="{{watchSymbolInput}}"
+          placeholder="输入六位股票代码"
+          bindinput="onWatchSymbolInput"
+          bindconfirm="onAddWatch"
+          confirm-type="done"
+        />
+        <button class="primary-button watch-add-button" loading="{{addingWatch}}" disabled="{{addingWatch}}" bindtap="onAddWatch">添加</button>
+      </view>
+      <view class="muted small top-gap">支持沪深主板、创业板、科创板，例如 600000</view>
+    </view>
+    <view wx:if="{{watchlistLoading}}" class="card state-card"><text class="muted">正在更新自选股…</text></view>
+    <view wx:elif="{{watchlistStocks.length === 0}}" class="card state-card">
+      <view class="section-title">还没有自选股</view>
+      <view class="muted small top-gap">在上方输入股票代码即可添加</view>
+    </view>
     <view wx:for="{{watchlistStocks}}" wx:key="id" class="card watch-card" data-id="{{item.id}}" bindtap="onStockTap">
-      <view><text class="strong">{{item.name}}</text><view class="muted small top-gap">{{item.ruleNote}}</view></view>
+      <view><text class="strong">{{item.name}}</text><text class="stock-code watch-code">{{item.id}}</text><view class="muted small top-gap">{{item.ruleNote}}</view></view>
       <text class="badge badge-{{item.statusType}}">{{item.status}}</text>
     </view>
   </view>

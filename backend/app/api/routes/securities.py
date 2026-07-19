@@ -1,9 +1,10 @@
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path
 
 from app.models.api import SecurityDetailResponse
-from app.repositories.mock_market import repository
+from app.repositories.database_market import DatabaseMarketRepository
+from app.repositories.dependencies import get_market_repository
 
 router = APIRouter(prefix="/securities", tags=["证券"])
 
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/securities", tags=["证券"])
 StockSymbol = Annotated[str, Path(description="六位股票代码", pattern=r"^\d{6}$", examples=["603018"])]
 
 
-def load_security(symbol: str) -> SecurityDetailResponse:
+def load_security(symbol: str, repository: DatabaseMarketRepository) -> SecurityDetailResponse:
     security = repository.security(symbol)
     if security is None:
         raise HTTPException(status_code=404, detail="证券不存在")
@@ -26,8 +27,11 @@ def load_security(symbol: str) -> SecurityDetailResponse:
     response_description="股票详情和异动状态",
     responses={404: {"description": "股票代码不存在"}},
 )
-def get_security(symbol: StockSymbol) -> SecurityDetailResponse:
-    return load_security(symbol)
+def get_security(
+    symbol: StockSymbol,
+    repository: DatabaseMarketRepository = Depends(get_market_repository),
+) -> SecurityDetailResponse:
+    return load_security(symbol, repository)
 
 
 @router.get(
@@ -41,5 +45,8 @@ def get_security(symbol: StockSymbol) -> SecurityDetailResponse:
     response_description="偏离值计算过程与规则进度",
     responses={404: {"description": "股票代码不存在"}},
 )
-def get_security_deviation(symbol: StockSymbol) -> SecurityDetailResponse:
-    return load_security(symbol)
+def get_security_deviation(
+    symbol: StockSymbol,
+    repository: DatabaseMarketRepository = Depends(get_market_repository),
+) -> SecurityDetailResponse:
+    return load_security(symbol, repository)

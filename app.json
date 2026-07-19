@@ -3,7 +3,7 @@
     "pages/index/index"
   ],
   "window": {
-    "navigationBarTitleText": "异动雷达",
+    "navigationBarTitleText": "异动偏离预警器",
     "navigationBarBackgroundColor": "#f7f8fa",
     "navigationBarTextStyle": "black",
     "backgroundColor": "#f7f8fa",

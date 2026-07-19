@@ -3,14 +3,20 @@ const api = require('../../services/api');
 Page({
   data: {
     view: 'home',
-    mode: 'intraday',
+    marketStatus: 'CLOSED',
     marketState: '正在连接后端',
+    marketSectionTitle: '异动结果',
+    marketSectionHint: '正在判断交易时段',
     refreshLabel: '等待接口响应',
     dataSourceLabel: '后端 Mock',
     loading: true,
+    refreshing: false,
     loadError: '',
     stocks: [],
     watchlistStocks: [],
+    watchSymbolInput: '',
+    watchlistLoading: false,
+    addingWatch: false,
     selectedStock: null,
     stats: { triggered: 0, near: 0, severe: 0 },
     wholeMarketAlert: true,
@@ -23,66 +29,124 @@ Page({
   },
 
   onLoad() {
-    this.loadBackendData();
-    this.startPolling();
     this._initialized = true;
+    this.loadBackendData();
   },
 
   onShow() {
-    if (this._initialized) this.startPolling();
+    if (this._initialized) this.loadBackendData();
   },
 
   onHide() {
-    this.stopPolling();
+    this.stopAutoRefresh();
   },
 
   onUnload() {
-    this.stopPolling();
+    this.stopAutoRefresh();
   },
 
   onPullDownRefresh() {
+    if (this.data.marketStatus === 'CLOSED') {
+      wx.stopPullDownRefresh();
+      wx.showToast({ title: '非交易时间段，行情不刷新', icon: 'none' });
+      return;
+    }
     this.loadBackendData().finally(() => wx.stopPullDownRefresh());
   },
 
   loadBackendData() {
-    this.setData({ loading: true, loadError: '' });
-    return Promise.all([api.getMarketStatus(), api.getAnomalies(this.data.mode)])
-      .then(([market, anomalies]) => {
+    if (this._loadingPromise) return this._loadingPromise;
+    const firstLoading = this.data.stocks.length === 0;
+    this.setData({ loading: firstLoading, refreshing: !firstLoading, loadError: '' });
+    wx.showLoading({ title: firstLoading ? '加载中' : '更新中', mask: false });
+    this._loadingPromise = api.getMarketStatus()
+      .then((market) => {
+        const requestMode = market.marketStatus === 'TRADING' ? 'intraday' : 'after';
+        return api.getAnomalies(requestMode).then((anomalies) => ({ market, anomalies, requestMode }));
+      })
+      .then(({ market, anomalies }) => {
         const stocks = anomalies.items.map(this.adaptApiStock);
+        const sourceLabels = {
+          DATABASE_DEMO: '数据库演示数据',
+          PUBLIC_DATA_SYNCING: '真实行情首次同步中',
+          SINA_PUBLIC_PARTIAL: '新浪财经真实行情（候选池）',
+        };
+        const sourceLabel = sourceLabels[market.source] || market.source;
+        const trading = market.marketStatus === 'TRADING';
         this.setData({
           stocks,
           stats: this.calculateStats(stocks),
-          marketState: this.data.mode === 'intraday' ? '盘中监测中' : '盘后快照',
-          refreshLabel: `${market.source === 'MOCK' ? 'Mock' : market.source} · 刚刚更新`,
-          dataSourceLabel: market.source === 'MOCK' ? '后端 Mock' : market.source,
+          marketStatus: market.marketStatus,
+          marketState: trading ? '交易时间段' : '非交易时间段',
+          marketSectionTitle: trading ? '交易时间段异动动态' : '非交易时间段异动结果',
+          marketSectionHint: trading ? '每 15 秒自动刷新' : '非交易时间段不刷新行情',
+          refreshLabel: `${sourceLabel} · 刚刚更新`,
+          dataSourceLabel: sourceLabel,
           loading: false,
+          refreshing: false,
           loadError: '',
-        });
+        }, () => this.configureAutoRefresh());
       })
       .catch(() => {
+        this.stopAutoRefresh();
         this.setData({
           stocks: [],
           stats: { triggered: 0, near: 0, severe: 0 },
           loading: false,
+          refreshing: false,
           loadError: '无法连接后端，请确认 FastAPI 已在 8000 端口启动',
           marketState: '后端未连接',
           refreshLabel: '点击重试',
         });
+      })
+      .finally(() => {
+        wx.hideLoading();
+        this._loadingPromise = null;
       });
+    return this._loadingPromise;
   },
 
-  startPolling() {
-    this.stopPolling();
+  configureAutoRefresh() {
+    this.stopAutoRefresh();
+    if (this.data.marketStatus !== 'TRADING') {
+      this._boundaryTimer = setTimeout(() => this.loadBackendData(), this.getNextMarketBoundaryDelay());
+      return;
+    }
     this._pollTimer = setInterval(() => {
       if (this.data.view === 'home') this.loadBackendData();
     }, 15000);
   },
 
-  stopPolling() {
+  stopAutoRefresh() {
     if (this._pollTimer) {
       clearInterval(this._pollTimer);
       this._pollTimer = null;
     }
+    if (this._boundaryTimer) {
+      clearTimeout(this._boundaryTimer);
+      this._boundaryTimer = null;
+    }
+  },
+
+  getNextMarketBoundaryDelay() {
+    const hourMs = 60 * 60 * 1000;
+    const nowMs = Date.now();
+    const beijingNow = new Date(nowMs + 8 * hourMs);
+    const year = beijingNow.getUTCFullYear();
+    const month = beijingNow.getUTCMonth();
+    const dayOfMonth = beijingNow.getUTCDate();
+    const dayOfWeek = beijingNow.getUTCDay();
+    const boundaries = [[9, 15, 2], [11, 30, 2], [13, 0, 2], [15, 0, 2]];
+
+    for (let offset = 0; offset < 8; offset += 1) {
+      const candidateWeekday = (dayOfWeek + offset) % 7;
+      if (candidateWeekday === 0 || candidateWeekday === 6) continue;
+      for (const [hour, minute, second] of boundaries) {
+        const candidate = Date.UTC(year, month, dayOfMonth + offset, hour, minute, second) - 8 * hourMs;
+        if (candidate > nowMs + 500) return Math.max(1000, candidate - nowMs);
+      }
+    }
+    return hourMs;
   },
 
   onRetry() {
@@ -129,20 +193,12 @@ Page({
     };
   },
 
-  onModeTap(event) {
-    const mode = event.currentTarget.dataset.mode;
-    const intraday = mode === 'intraday';
-    this.setData({
-      mode,
-      marketState: intraday ? '盘中监测中' : '盘后快照',
-      refreshLabel: intraday ? '12 秒前更新' : '15:30 已生成',
-    }, () => this.loadBackendData());
-  },
-
   onStockTap(event) {
     const id = event.currentTarget.dataset.id;
-    const selectedStock = this.data.stocks.find((stock) => stock.id === id);
+    const selectedStock = this.data.stocks.find((stock) => stock.id === id)
+      || this.data.watchlistStocks.find((stock) => stock.id === id);
     if (!selectedStock) return;
+    this._detailOrigin = this.data.view;
     this.setData({ view: 'detail', selectedStock });
     api.getSecurity(id)
       .then((item) => this.setData({ selectedStock: this.adaptApiStock(item) }))
@@ -150,19 +206,52 @@ Page({
   },
 
   onBack() {
-    this.setData({ view: 'home' });
+    const view = this._detailOrigin || 'home';
+    this._detailOrigin = null;
+    this.setData({ view });
   },
 
   onNavTap(event) {
     const view = event.currentTarget.dataset.view;
     this.setData({ view });
     if (view === 'watch') this.loadWatchlist();
+    if (view === 'home') this.loadBackendData();
   },
 
   loadWatchlist() {
+    this.setData({ watchlistLoading: true });
     return api.getWatchlist()
       .then((response) => this.setData({ watchlistStocks: response.items.map(this.adaptApiStock) }))
-      .catch(() => wx.showToast({ title: '自选接口请求失败', icon: 'none' }));
+      .catch(() => wx.showToast({ title: '自选接口请求失败', icon: 'none' }))
+      .finally(() => this.setData({ watchlistLoading: false }));
+  },
+
+  onWatchSymbolInput(event) {
+    this.setData({ watchSymbolInput: String(event.detail.value || '').replace(/\D/g, '').slice(0, 6) });
+  },
+
+  onAddWatch() {
+    const symbol = this.data.watchSymbolInput.trim();
+    if (!/^\d{6}$/.test(symbol)) {
+      wx.showToast({ title: '请输入六位股票代码', icon: 'none' });
+      return;
+    }
+    if (this.data.addingWatch) return;
+    this.setData({ addingWatch: true });
+    wx.showLoading({ title: '添加中', mask: true });
+    api.addWatch(symbol)
+      .then((response) => {
+        this.setData({
+          watchSymbolInput: '',
+          watchlistStocks: response.items.map(this.adaptApiStock),
+        });
+        wx.showToast({ title: '已加入自选', icon: 'success' });
+      })
+      .catch((error) => wx.showToast({ title: error.message || '股票代码不存在', icon: 'none' }))
+      .finally(() => {
+        this.setData({ addingWatch: false });
+        wx.hideLoading();
+      });
   },
 
   onToggleWatch() {

@@ -1,17 +1,6 @@
-from copy import deepcopy
-from datetime import date, datetime
-from zoneinfo import ZoneInfo
+"""仅用于空数据库初始化的演示行情，不直接处理 API 请求。"""
 
-from app.models.api import (
-    AnomalyItem,
-    AnomalyListResponse,
-    MarketStatusResponse,
-    RuleMetric,
-    SecurityDetailResponse,
-    WatchlistResponse,
-)
-
-SHANGHAI = ZoneInfo("Asia/Shanghai")
+from datetime import date
 
 
 def metric(key: str, label: str, current: str, threshold: str, progress: int, triggered: bool) -> dict:
@@ -63,43 +52,3 @@ SEED_ITEMS = [
         "watched": True, "alerted": False,
     },
 ]
-
-
-class MockMarketRepository:
-    def __init__(self) -> None:
-        self._items = deepcopy(SEED_ITEMS)
-
-    @staticmethod
-    def now() -> datetime:
-        return datetime.now(SHANGHAI)
-
-    def market_status(self) -> MarketStatusResponse:
-        return MarketStatusResponse(market_status="TRADING", quote_time=self.now(), data_health="HEALTHY")
-
-    def anomalies(self, mode: str) -> AnomalyListResponse:
-        status = "CLOSED" if mode == "AFTER_HOURS" else "TRADING"
-        return AnomalyListResponse(market_status=status, quote_time=self.now(), data_health="HEALTHY", mode=mode, items=self._items)
-
-    def security(self, symbol: str) -> SecurityDetailResponse | None:
-        item = next((value for value in self._items if value["symbol"] == symbol), None)
-        return SecurityDetailResponse(**item) if item else None
-
-    def watchlist(self) -> WatchlistResponse:
-        return WatchlistResponse(items=[AnomalyItem(**item) for item in self._items if item["watched"]])
-
-    def set_watched(self, symbol: str, enabled: bool) -> bool:
-        item = next((value for value in self._items if value["symbol"] == symbol), None)
-        if item is None:
-            return False
-        item["watched"] = enabled
-        return True
-
-    def set_alerted(self, symbol: str, enabled: bool) -> bool:
-        item = next((value for value in self._items if value["symbol"] == symbol), None)
-        if item is None:
-            return False
-        item["alerted"] = enabled
-        return True
-
-
-repository = MockMarketRepository()

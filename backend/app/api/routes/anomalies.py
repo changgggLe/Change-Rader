@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.models.api import AnomalyListResponse
-from app.repositories.mock_market import repository
+from app.repositories.database_market import DatabaseMarketRepository
+from app.repositories.dependencies import get_market_repository
 
 router = APIRouter(prefix="/anomalies", tags=["异动"])
 
@@ -16,7 +17,7 @@ router = APIRouter(prefix="/anomalies", tags=["异动"])
     ),
     response_description="盘中异动股票及计算摘要",
 )
-def list_intraday_anomalies() -> AnomalyListResponse:
+def list_intraday_anomalies(repository: DatabaseMarketRepository = Depends(get_market_repository)) -> AnomalyListResponse:
     return repository.anomalies("INTRADAY")
 
 
@@ -30,7 +31,7 @@ def list_intraday_anomalies() -> AnomalyListResponse:
     ),
     response_description="盘后系统计算的异动股票列表",
 )
-def list_confirmed_anomalies() -> AnomalyListResponse:
+def list_confirmed_anomalies(repository: DatabaseMarketRepository = Depends(get_market_repository)) -> AnomalyListResponse:
     return repository.anomalies("AFTER_HOURS")
 
 
@@ -41,5 +42,5 @@ def list_confirmed_anomalies() -> AnomalyListResponse:
     description="返回新规生效日之后保存的历史系统计算事件。阶段 1 暂时返回模拟数据。",
     response_description="历史异动事件列表",
 )
-def list_anomaly_history() -> AnomalyListResponse:
+def list_anomaly_history(repository: DatabaseMarketRepository = Depends(get_market_repository)) -> AnomalyListResponse:
     return repository.anomalies("HISTORY")

@@ -14,11 +14,16 @@ class ApiModel(BaseModel):
 
 
 class MarketStatusResponse(ApiModel):
-    market_status: Literal["TRADING", "CLOSED"] = Field(description="市场状态：TRADING 盘中，CLOSED 休市或盘后")
+    market_status: Literal["TRADING", "CLOSED"] = Field(
+        description="北京时间工作日 09:15～11:30、13:00～15:00 返回 TRADING，其余时间返回 CLOSED"
+    )
     quote_time: datetime = Field(description="最近一批行情的北京时间")
     data_health: Literal["HEALTHY", "DEGRADED"] = Field(description="数据健康状态：HEALTHY 正常，DEGRADED 降级")
     refresh_interval_seconds: int = Field(default=15, description="建议小程序轮询间隔，单位为秒")
-    source: str = Field(default="MOCK", description="当前行情数据源标识；MOCK 表示阶段 1 模拟数据")
+    source: str = Field(
+        default="DATABASE_DEMO",
+        description="数据源：SINA_PUBLIC_PARTIAL 为新浪财经真实行情候选池",
+    )
 
 
 class RuleMetric(ApiModel):
@@ -47,9 +52,9 @@ class AnomalyItem(ApiModel):
     benchmark_return: str = Field(description="窗口内基准指数累计涨幅")
     deviation: str = Field(description="累计偏离值：股票累计涨幅减去指数累计涨幅")
     threshold: str = Field(description="当前命中或接近规则的阈值")
-    status: Literal["SYSTEM_TRIGGERED", "SEVERE", "NEAR"] = Field(description="机器可读的系统计算状态")
+    status: Literal["SYSTEM_TRIGGERED", "SEVERE", "NEAR", "NORMAL"] = Field(description="机器可读的系统计算状态")
     status_label: str = Field(description="页面展示的中文状态")
-    status_type: Literal["triggered", "severe", "near"] = Field(description="前端样式类型")
+    status_type: Literal["triggered", "severe", "near", "normal"] = Field(description="前端样式类型")
     rule_note: str = Field(description="本次状态对应的规则摘要")
     metrics: list[RuleMetric] = Field(description="3 日、10 日和 30 日规则的详细进度")
     watched: bool = Field(default=False, description="当前用户是否已加入自选")
