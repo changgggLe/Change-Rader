@@ -1,0 +1,136 @@
+<view class="page-shell safe-bottom">
+  <view wx:if="{{view === 'home'}}" class="screen">
+    <view class="page-header">
+      <view>
+        <text class="eyebrow">股票异动监测</text>
+        <view class="page-title">异动雷达</view>
+      </view>
+      <text class="badge badge-muted">模拟数据</text>
+    </view>
+
+    <view class="card market-card">
+      <view class="row-between">
+        <view class="live-state"><text class="live-dot"></text><text>{{marketState}}</text></view>
+        <text class="muted small">{{refreshLabel}}</text>
+      </view>
+      <view class="mode-switch" role="group" aria-label="行情时段">
+        <button class="mode-button {{mode === 'intraday' ? 'active' : ''}}" data-mode="intraday" bindtap="onModeTap">盘中</button>
+        <button class="mode-button {{mode === 'after' ? 'active' : ''}}" data-mode="after" bindtap="onModeTap">盘后</button>
+      </view>
+    </view>
+
+    <view class="summary-grid">
+      <view class="summary-card"><text class="summary-label">系统触发</text><text class="summary-value rise">7</text></view>
+      <view class="summary-card"><text class="summary-label">接近异动</text><text class="summary-value near">12</text></view>
+      <view class="summary-card"><text class="summary-label">严重异动</text><text class="summary-value rise">2</text></view>
+    </view>
+
+    <view class="section-header">
+      <text class="section-title">全市场动态</text>
+      <text class="muted small">10–15 秒刷新</text>
+    </view>
+
+    <view class="stock-list">
+      <button wx:for="{{stocks}}" wx:key="id" class="stock-row" data-id="{{item.id}}" bindtap="onStockTap">
+        <view class="stock-copy">
+          <view class="stock-title"><text>{{item.name}}</text><text class="stock-code">{{item.codeLabel}}</text></view>
+          <text class="muted small">{{item.ruleNote}}</text>
+        </view>
+        <view class="stock-result">
+          <text class="change {{item.statusType === 'near' ? 'near' : 'rise'}}">{{item.displayChange}}</text>
+          <text class="badge badge-{{item.statusType}}">{{item.status}}</text>
+        </view>
+      </button>
+    </view>
+  </view>
+
+  <view wx:elif="{{view === 'detail'}}" class="screen">
+    <view class="page-header">
+      <button class="text-button" bindtap="onBack">‹ 返回</button>
+      <text class="badge badge-{{selectedStock.statusType}}">{{selectedStock.status}}</text>
+    </view>
+
+    <view class="detail-quote">
+      <view>
+        <view class="page-title">{{selectedStock.name}}</view>
+        <text class="stock-code">{{selectedStock.codeLabel}}</text>
+      </view>
+      <view class="quote-number">
+        <text class="price">{{selectedStock.price}}</text>
+        <text class="rise">{{selectedStock.dayChange}}</text>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-header no-margin"><text class="section-title">规则判定</text><text class="muted small">系统实时计算</text></view>
+      <view class="rule-list">
+        <view class="rule-item">
+          <view class="row-between"><text>3 日偏离值</text><text class="rise strong">{{selectedStock.r3}}</text></view>
+          <view class="progress"><view class="progress-fill" style="width: {{selectedStock.r3Width}}%"></view></view>
+        </view>
+        <view class="rule-item">
+          <view class="row-between"><text>10 日严重异动</text><text class="strong">{{selectedStock.r10}}</text></view>
+          <view class="progress"><view class="progress-fill severe-fill" style="width: {{selectedStock.r10Width}}%"></view></view>
+        </view>
+        <view class="rule-item">
+          <view class="row-between"><text>30 日严重异动</text><text class="strong">{{selectedStock.r30}}</text></view>
+          <view class="progress"><view class="progress-fill near-fill" style="width: {{selectedStock.r30Width}}%"></view></view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-header no-margin"><text class="section-title">本次计算</text><text class="badge badge-muted">非交易所确认</text></view>
+      <view class="calculation">
+        <text>股票 3 日累计涨幅</text><text class="strong">{{selectedStock.stockReturn}}</text>
+        <text>{{selectedStock.indexName}} 3 日累计涨幅</text><text class="strong">{{selectedStock.indexReturn}}</text>
+        <text>累计偏离值</text><text class="strong rise">{{selectedStock.deviation}}</text>
+      </view>
+    </view>
+
+    <view class="action-grid">
+      <button class="secondary-button" bindtap="onToggleWatch">{{selectedStock.watched ? '★ 已加入自选' : '☆ 加入自选'}}</button>
+      <button class="primary-button" bindtap="onToggleAlert">{{selectedStock.alerted ? '提醒已开启' : '订阅提醒'}}</button>
+    </view>
+  </view>
+
+  <view wx:elif="{{view === 'watch'}}" class="screen">
+    <view class="page-header"><view><text class="eyebrow">重点跟踪</text><view class="page-title">我的自选</view></view><text class="badge badge-muted">2 只</text></view>
+    <view wx:for="{{stocks}}" wx:key="id" wx:if="{{item.watched}}" class="card watch-card" data-id="{{item.id}}" bindtap="onStockTap">
+      <view><text class="strong">{{item.name}}</text><view class="muted small top-gap">{{item.ruleNote}}</view></view>
+      <text class="badge badge-{{item.statusType}}">{{item.status}}</text>
+    </view>
+  </view>
+
+  <view wx:elif="{{view === 'alerts'}}" class="screen">
+    <view class="page-header"><view><text class="eyebrow">合并推送</text><view class="page-title">提醒中心</view></view><text class="header-icon">◉</text></view>
+    <view class="card">
+      <view class="row-between"><text class="section-title">全市场提醒</text><switch checked="{{wholeMarketAlert}}" color="#2878ff" bindchange="onWholeMarketAlertChange" /></view>
+      <view class="muted small paragraph">盘中按整点合并，盘后生成收盘快照，减少重复提醒。</view>
+    </view>
+    <view class="notice-list">
+      <view wx:for="{{notices}}" wx:key="time" class="notice-row">
+        <text class="notice-time">{{item.time}}</text><text>{{item.title}}</text><text class="{{item.sent ? 'badge badge-triggered' : 'muted small'}}">{{item.state}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:elif="{{view === 'mine'}}" class="screen">
+    <view class="page-header"><view><text class="eyebrow">内部测试版</text><view class="page-title">我的</view></view><text class="header-icon">●</text></view>
+    <view class="card">
+      <view class="row-between"><text class="section-title">行情刷新</text><text class="badge badge-muted">15 秒</text></view>
+      <view class="muted small paragraph">覆盖沪深主板、创业板、科创板，仅监测正向价格涨幅异动。</view>
+    </view>
+    <view class="card">
+      <view class="row-between"><text class="section-title">重要说明</text><text class="header-icon">!</text></view>
+      <view class="muted small paragraph">所有状态均为系统按公开规则计算，不代表交易所最终认定，也不构成投资建议。</view>
+    </view>
+  </view>
+</view>
+
+<view class="bottom-nav safe-bottom">
+  <button class="nav-button {{view === 'home' || view === 'detail' ? 'active' : ''}}" data-view="home" bindtap="onNavTap"><text class="nav-icon">◉</text><text>异动</text></button>
+  <button class="nav-button {{view === 'watch' ? 'active' : ''}}" data-view="watch" bindtap="onNavTap"><text class="nav-icon">☆</text><text>自选</text></button>
+  <button class="nav-button {{view === 'alerts' ? 'active' : ''}}" data-view="alerts" bindtap="onNavTap"><text class="nav-icon">♢</text><text>提醒</text></button>
+  <button class="nav-button {{view === 'mine' ? 'active' : ''}}" data-view="mine" bindtap="onNavTap"><text class="nav-icon">●</text><text>我的</text></button>
+</view>

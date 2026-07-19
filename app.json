@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "异动雷达",
+    "navigationBarBackgroundColor": "#f7f8fa",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f8fa",
+    "backgroundTextStyle": "light"
+  },
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

@@ -1,0 +1,31 @@
+{
+  "description": "异动雷达微信小程序 UI MVP",
+  "packOptions": {
+    "ignore": []
+  },
+  "setting": {
+    "useCompilerPlugins": false,
+    "useIsolateContext": true,
+    "useApiHook": true,
+    "useApiHostProcess": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "compileHotReLoad": true,
+    "urlCheck": false,
+    "coverView": true,
+    "showShadowRootInWxmlPanel": true,
+    "packNpmManually": false,
+    "enableEngineNative": false,
+    "minified": true,
+    "enhance": true,
+    "ignoreUploadUnusedFiles": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "trial",
+  "appid": "touristappid",
+  "projectname": "yidong-radar",
+  "condition": {}
+}
