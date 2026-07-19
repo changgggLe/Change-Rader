@@ -74,6 +74,8 @@
 .near { color: #d88716; }
 .paragraph { margin-top: 20rpx; line-height: 1.75; }
 .top-gap { margin-top: 8rpx; }
+.state-card { text-align: center; padding-top: 44rpx; padding-bottom: 44rpx; }
+.retry-button { width: 240rpx; margin: 28rpx auto 0; }
 
 .mode-switch {
   display: flex;

@@ -5,7 +5,7 @@
         <text class="eyebrow">股票异动监测</text>
         <view class="page-title">异动雷达</view>
       </view>
-      <text class="badge badge-muted">模拟数据</text>
+      <text class="badge badge-muted">{{dataSourceLabel}}</text>
     </view>
 
     <view class="card market-card">
@@ -20,9 +20,9 @@
     </view>
 
     <view class="summary-grid">
-      <view class="summary-card"><text class="summary-label">系统触发</text><text class="summary-value rise">7</text></view>
-      <view class="summary-card"><text class="summary-label">接近异动</text><text class="summary-value near">12</text></view>
-      <view class="summary-card"><text class="summary-label">严重异动</text><text class="summary-value rise">2</text></view>
+      <view class="summary-card"><text class="summary-label">系统触发</text><text class="summary-value rise">{{stats.triggered}}</text></view>
+      <view class="summary-card"><text class="summary-label">接近异动</text><text class="summary-value near">{{stats.near}}</text></view>
+      <view class="summary-card"><text class="summary-label">严重异动</text><text class="summary-value rise">{{stats.severe}}</text></view>
     </view>
 
     <view class="section-header">
@@ -30,7 +30,18 @@
       <text class="muted small">10–15 秒刷新</text>
     </view>
 
-    <view class="stock-list">
+    <view wx:if="{{loading}}" class="card state-card">
+      <view class="section-title">正在读取后端 Mock 数据</view>
+      <view class="muted small top-gap">请求 /market/status 和 /anomalies 接口</view>
+    </view>
+
+    <view wx:elif="{{loadError}}" class="card state-card">
+      <view class="section-title">后端连接失败</view>
+      <view class="muted small paragraph">{{loadError}}</view>
+      <button class="primary-button retry-button" bindtap="onRetry">重新请求</button>
+    </view>
+
+    <view wx:else class="stock-list">
       <button wx:for="{{stocks}}" wx:key="id" class="stock-row" data-id="{{item.id}}" bindtap="onStockTap">
         <view class="stock-copy">
           <view class="stock-title"><text>{{item.name}}</text><text class="stock-code">{{item.codeLabel}}</text></view>
@@ -95,8 +106,8 @@
   </view>
 
   <view wx:elif="{{view === 'watch'}}" class="screen">
-    <view class="page-header"><view><text class="eyebrow">重点跟踪</text><view class="page-title">我的自选</view></view><text class="badge badge-muted">2 只</text></view>
-    <view wx:for="{{stocks}}" wx:key="id" wx:if="{{item.watched}}" class="card watch-card" data-id="{{item.id}}" bindtap="onStockTap">
+    <view class="page-header"><view><text class="eyebrow">重点跟踪</text><view class="page-title">我的自选</view></view><text class="badge badge-muted">{{watchlistStocks.length}} 只</text></view>
+    <view wx:for="{{watchlistStocks}}" wx:key="id" class="card watch-card" data-id="{{item.id}}" bindtap="onStockTap">
       <view><text class="strong">{{item.name}}</text><view class="muted small top-gap">{{item.ruleNote}}</view></view>
       <text class="badge badge-{{item.statusType}}">{{item.status}}</text>
     </view>

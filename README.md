@@ -57,4 +57,30 @@
 
 ## 下一阶段
 
-下一阶段会把 `pages/index/index.js` 中的模拟数据替换为后端 API，并加入登录、行情更新、异动规则计算和消息订阅。
+完整任务拆解见 [ROADMAP.md](ROADMAP.md)。当前已完成 FastAPI 接口骨架与小程序请求适配，接口暂由内存模拟仓储提供数据。
+
+## 启动后端接口
+
+需要 Python 3.12：
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[test]"
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+```
+
+启动后访问：
+
+- 健康检查：<http://127.0.0.1:8000/health>
+- Swagger 接口文档：<http://127.0.0.1:8000/docs>
+- 盘中榜单：<http://127.0.0.1:8000/api/v1/anomalies/intraday>
+
+微信开发者工具继续导入仓库根目录。小程序默认访问 `http://127.0.0.1:8000/api/v1`；配置位于 `config/env.js`。页面股票、统计、详情、自选和提醒状态均以后端 Mock 接口为准；后端未启动时页面会明确显示连接失败。
+
+运行后端测试：
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m pytest
+```
