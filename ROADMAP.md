@@ -82,7 +82,8 @@
 ## 阶段 5：用户与通知
 
 - [x] 匿名设备用户标识与自选数据隔离（内部 MVP）
-- [ ] 微信 `code2Session` 登录
+- [x] CloudBase `callContainer` 注入 OpenID 与用户数据隔离
+- [ ] 非 CloudBase 部署所需的微信 `code2Session` 登录
 - [ ] 内部用户白名单与角色
 - [ ] 访问令牌和管理接口鉴权
 - [ ] 微信一次性订阅消息授权上报
@@ -94,7 +95,11 @@
 
 ## 部署与发布准备
 
-- [ ] 后端 Docker 镜像
+- [x] CloudBase 云托管 Dockerfile、动态端口和构建忽略配置
+- [x] 小程序 `wx.cloud.callContainer` 请求适配
+- [x] CloudBase OpenID 身份请求头适配
+- [ ] CloudBase 环境、MySQL 和云托管服务实际创建
+- [ ] 云端镜像构建与接口验收
 - [ ] Nginx、HTTPS、健康检查
 - [ ] 国内服务器、域名和备案
 - [ ] 数据库备份与恢复演练

@@ -2,6 +2,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from app.market_data.engine import ReturnPoint, calculate_three_day, calculate_window
+from app.market_data.sync import active_market_source
+from app.settings.config import Settings
 
 
 def points(stock: list[str], benchmark: list[str]) -> list[ReturnPoint]:
@@ -31,3 +33,8 @@ def test_three_day_rule_selects_best_window_within_three_days() -> None:
     assert result is not None
     assert result.days == 3
     assert result.deviation > Decimal("20")
+
+
+def test_active_market_source_matches_configured_provider() -> None:
+    assert active_market_source(Settings(market_data_provider="sina")) == "SINA_PUBLIC"
+    assert active_market_source(Settings(market_data_provider="eastmoney")) == "EASTMONEY_PUBLIC"

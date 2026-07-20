@@ -32,6 +32,7 @@ def test_health(client: TestClient) -> None:
     assert response.json()["status"] == "ok"
     assert response.json()["database"] == "ok"
     assert response.json()["cache"] == "ok"
+    assert response.json()["market_sync"] == "idle"
 
 
 def test_intraday_anomalies_use_database_and_camel_case_contract(client: TestClient) -> None:
@@ -94,3 +95,51 @@ def test_watchlists_are_isolated_by_user_header(client: TestClient) -> None:
 
     assert "603018" in symbols_a
     assert "603018" not in symbols_b
+
+
+def test_wechat_openid_takes_precedence_over_device_user_key(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path / "wechat-identity.db")
+    settings.wechat_appid = "wx-test-appid"
+    headers = {
+        "X-User-Key": "device_user_a",
+        "X-WX-OPENID": "openid_user_a",
+        "X-WX-APPID": "wx-test-appid",
+    }
+
+    with TestClient(create_app(settings)) as test_client:
+        assert test_client.post("/api/v1/watchlist/603018", headers=headers).status_code == 201
+        openid_symbols = [
+            item["symbol"] for item in test_client.get("/api/v1/watchlist", headers=headers).json()["items"]
+        ]
+        device_symbols = [
+            item["symbol"]
+            for item in test_client.get("/api/v1/watchlist", headers={"X-User-Key": "device_user_a"}).json()["items"]
+        ]
+
+    assert "603018" in openid_symbols
+    assert "603018" not in device_symbols
+
+
+def test_rejects_unexpected_wechat_appid(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path / "wechat-appid.db")
+    settings.wechat_appid = "wx-expected-appid"
+
+    with TestClient(create_app(settings)) as test_client:
+        response = test_client.get(
+            "/api/v1/watchlist",
+            headers={"X-WX-OPENID": "openid_user_a", "X-WX-APPID": "wx-other-appid"},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "微信小程序身份不匹配"
+
+
+def test_can_require_cloudbase_wechat_identity(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path / "wechat-required.db")
+    settings.require_wechat_identity = True
+
+    with TestClient(create_app(settings)) as test_client:
+        response = test_client.get("/api/v1/watchlist")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "缺少微信用户身份"

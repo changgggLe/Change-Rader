@@ -10,7 +10,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
-SOURCE = "SINA_EASTMONEY_PUBLIC"
+SOURCE = "EASTMONEY_PUBLIC"
 TOKEN = "fa5fd1943c7b386f172d6893dbfba10b"
 
 
@@ -80,6 +80,7 @@ class EastmoneyClient:
     """东方财富公开网页接口适配器；仅用于内部 MVP，不代表数据授权。"""
 
     spot_url = "https://82.push2.eastmoney.com/api/qt/clist/get"
+    quote_url = "https://push2.eastmoney.com/api/qt/stock/get"
     history_url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
 
     def __init__(self, timeout_seconds: int = 12, use_environment_proxy: bool = False) -> None:
@@ -160,6 +161,37 @@ class EastmoneyClient:
                 )
             )
         return bars
+
+    def quote(self, symbol: str) -> SpotQuote | None:
+        board = board_for_symbol(symbol)
+        if board is None:
+            return None
+        secid = f"{1 if board.exchange == 'SSE' else 0}.{symbol}"
+        params = {
+            "secid": secid,
+            "ut": TOKEN,
+            "fltt": 2,
+            "invt": 2,
+            "fields": "f43,f44,f45,f46,f47,f57,f58,f60,f170",
+        }
+        data = self._get_json(self.quote_url, params).get("data") or {}
+        last_price = _decimal(data.get("f43"))
+        previous_close = _decimal(data.get("f60"))
+        change_percent = _decimal(data.get("f170"))
+        if last_price is None or previous_close is None or change_percent is None:
+            return None
+        return SpotQuote(
+            symbol=symbol,
+            name=str(data.get("f58") or symbol),
+            board=board,
+            last_price=last_price,
+            change_percent=change_percent,
+            open_price=_decimal(data.get("f46")),
+            high_price=_decimal(data.get("f44")),
+            low_price=_decimal(data.get("f45")),
+            previous_close=previous_close,
+            volume=_decimal(data.get("f47")),
+        )
 
     def _get_json(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
         response = self.session.get(url, params=params, timeout=self.timeout_seconds)

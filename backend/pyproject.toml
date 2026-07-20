@@ -9,9 +9,11 @@ description = "异动偏离预警器 FastAPI 后端 MVP"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi[standard]>=0.115,<1.0",
+  "pydantic-settings>=2.10,<3.0",
   "SQLAlchemy>=2.0.51,<2.1",
   "alembic>=1.16,<2.0",
   "psycopg[binary]>=3.2,<4.0",
+  "PyMySQL>=1.1,<2.0",
   "redis>=6,<7",
   "requests>=2.32,<3",
   "tzdata>=2025.2",

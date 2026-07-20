@@ -9,13 +9,22 @@ from sqlalchemy.orm import Session
 
 from app.cache.service import CacheService
 from app.db.models import AnomalyEvent, DailyQuote, IndexDailyQuote, RuleVersion, SecurityMaster
-from app.market_data.eastmoney import BOARDS, BoardDefinition, DailyBar, SpotQuote
+from app.market_data.eastmoney import BOARDS, SOURCE as EASTMONEY_SOURCE, BoardDefinition, DailyBar, EastmoneyClient, SpotQuote
 from app.market_data.engine import ReturnPoint, WindowResult, calculate_three_day, calculate_window
-from app.market_data.sina import SOURCE, SinaSpotClient
+from app.market_data.sina import SOURCE as SINA_SOURCE, SinaSpotClient
 from app.settings.config import Settings
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 REAL_DATA_HEALTH = "DEGRADED"  # 候选池模式，真实数据但尚非全市场历史覆盖
+
+
+def active_market_source(settings: Settings) -> str:
+    return EASTMONEY_SOURCE if settings.market_data_provider == "eastmoney" else SINA_SOURCE
+
+
+def build_market_client(settings: Settings) -> SinaSpotClient | EastmoneyClient:
+    client_class = EastmoneyClient if settings.market_data_provider == "eastmoney" else SinaSpotClient
+    return client_class(settings.market_http_timeout_seconds, settings.market_http_use_environment_proxy)
 
 
 def is_trading_time(now: datetime) -> bool:
@@ -42,16 +51,16 @@ def _upsert_security(session: Session, quote: SpotQuote) -> SecurityMaster:
     return security
 
 
-def _upsert_stock_bar(session: Session, symbol: str, bar: DailyBar, source_time: datetime) -> None:
+def _upsert_stock_bar(session: Session, symbol: str, bar: DailyBar, source_time: datetime, source: str) -> None:
     row = session.scalar(
         select(DailyQuote).where(
             DailyQuote.symbol == symbol,
             DailyQuote.trade_date == bar.trade_date,
-            DailyQuote.source == SOURCE,
+            DailyQuote.source == source,
         )
     )
     if row is None:
-        row = DailyQuote(symbol=symbol, trade_date=bar.trade_date, source=SOURCE)
+        row = DailyQuote(symbol=symbol, trade_date=bar.trade_date, source=source)
         session.add(row)
     row.open_price = bar.open_price
     row.high_price = bar.high_price
@@ -63,16 +72,16 @@ def _upsert_stock_bar(session: Session, symbol: str, bar: DailyBar, source_time:
     row.quality_status = "VALID"
 
 
-def _upsert_spot(session: Session, quote: SpotQuote, trade_date, source_time: datetime) -> None:
+def _upsert_spot(session: Session, quote: SpotQuote, trade_date, source_time: datetime, source: str) -> None:
     row = session.scalar(
         select(DailyQuote).where(
             DailyQuote.symbol == quote.symbol,
             DailyQuote.trade_date == trade_date,
-            DailyQuote.source == SOURCE,
+            DailyQuote.source == source,
         )
     )
     if row is None:
-        row = DailyQuote(symbol=quote.symbol, trade_date=trade_date, source=SOURCE)
+        row = DailyQuote(symbol=quote.symbol, trade_date=trade_date, source=source)
         session.add(row)
     row.open_price = quote.open_price
     row.high_price = quote.high_price
@@ -85,16 +94,16 @@ def _upsert_spot(session: Session, quote: SpotQuote, trade_date, source_time: da
     row.quality_status = "VALID"
 
 
-def _upsert_index_bar(session: Session, board: BoardDefinition, bar: DailyBar) -> None:
+def _upsert_index_bar(session: Session, board: BoardDefinition, bar: DailyBar, source: str) -> None:
     row = session.scalar(
         select(IndexDailyQuote).where(
             IndexDailyQuote.index_code == board.benchmark_code,
             IndexDailyQuote.trade_date == bar.trade_date,
-            IndexDailyQuote.source == SOURCE,
+            IndexDailyQuote.source == source,
         )
     )
     if row is None:
-        row = IndexDailyQuote(index_code=board.benchmark_code, trade_date=bar.trade_date, source=SOURCE)
+        row = IndexDailyQuote(index_code=board.benchmark_code, trade_date=bar.trade_date, source=source)
         session.add(row)
     row.index_name = board.benchmark_name
     row.close_value = bar.close_price
@@ -180,7 +189,8 @@ def _build_event(
 
 
 def sync_market_data(session: Session, cache: CacheService, settings: Settings) -> dict[str, int | str]:
-    spot_client = SinaSpotClient(settings.market_http_timeout_seconds, settings.market_http_use_environment_proxy)
+    spot_client = build_market_client(settings)
+    source = active_market_source(settings)
     now = datetime.now(SHANGHAI)
 
     # 免费站点对同一 IP 的并发较敏感，实时排行按板块顺序获取更稳定。
@@ -193,7 +203,7 @@ def sync_market_data(session: Session, cache: CacheService, settings: Settings) 
     existing_counts = dict(
         session.execute(
             select(DailyQuote.symbol, func.count(DailyQuote.id))
-            .where(DailyQuote.symbol.in_([quote.symbol for quote in quotes]), DailyQuote.source == SOURCE)
+            .where(DailyQuote.symbol.in_([quote.symbol for quote in quotes]), DailyQuote.source == source)
             .group_by(DailyQuote.symbol)
         ).all()
     )
@@ -209,13 +219,13 @@ def sync_market_data(session: Session, cache: CacheService, settings: Settings) 
     for quote in quotes:
         _upsert_security(session, quote)
         for bar in histories.get(quote.symbol, []):
-            _upsert_stock_bar(session, quote.symbol, bar, now)
+            _upsert_stock_bar(session, quote.symbol, bar, now, source)
         # 历史日线通常已经包含当天；先落库，再用实时快照覆盖同一行。
         session.flush()
-        _upsert_spot(session, quote, latest_trade_date, now)
+        _upsert_spot(session, quote, latest_trade_date, now, source)
     for board in BOARDS:
         for bar in index_histories[board.benchmark_code]:
-            _upsert_index_bar(session, board, bar)
+            _upsert_index_bar(session, board, bar, source)
     session.flush()
 
     mode = "INTRADAY" if is_trading_time(now) else "AFTER_HOURS"
@@ -230,14 +240,14 @@ def sync_market_data(session: Session, cache: CacheService, settings: Settings) 
     for quote in quotes:
         stock_rows = session.execute(
             select(DailyQuote.trade_date, DailyQuote.change_percent)
-            .where(DailyQuote.symbol == quote.symbol, DailyQuote.source == SOURCE)
+            .where(DailyQuote.symbol == quote.symbol, DailyQuote.source == source)
             .order_by(DailyQuote.trade_date)
         ).all()
         index_rows = dict(
             session.execute(
                 select(IndexDailyQuote.trade_date, IndexDailyQuote.change_percent).where(
                     IndexDailyQuote.index_code == quote.board.benchmark_code,
-                    IndexDailyQuote.source == SOURCE,
+                    IndexDailyQuote.source == source,
                 )
             ).all()
         )
@@ -250,12 +260,13 @@ def sync_market_data(session: Session, cache: CacheService, settings: Settings) 
     session.commit()
     cache.delete_prefix("market:")
     cache.delete_prefix("anomaly:")
-    return {"source": SOURCE, "quotes": len(quotes), "backfilled": len(needs_history), "events": events, "mode": mode}
+    return {"source": source, "quotes": len(quotes), "backfilled": len(needs_history), "events": events, "mode": mode}
 
 
 def sync_watch_symbol(session: Session, cache: CacheService, settings: Settings, symbol: str) -> bool:
     """按代码补齐一只自选股及其基准指数，不要求它已进入异动候选池。"""
-    client = SinaSpotClient(settings.market_http_timeout_seconds, settings.market_http_use_environment_proxy)
+    client = build_market_client(settings)
+    source = active_market_source(settings)
     quote = client.quote(symbol)
     if quote is None:
         return False
@@ -266,12 +277,12 @@ def sync_watch_symbol(session: Session, cache: CacheService, settings: Settings,
     now = datetime.now(SHANGHAI)
     _upsert_security(session, quote)
     for bar in stock_history:
-        _upsert_stock_bar(session, symbol, bar, now)
+        _upsert_stock_bar(session, symbol, bar, now, source)
     session.flush()
     latest_trade_date = index_history[-1].trade_date
-    _upsert_spot(session, quote, latest_trade_date, now)
+    _upsert_spot(session, quote, latest_trade_date, now, source)
     for bar in index_history:
-        _upsert_index_bar(session, quote.board, bar)
+        _upsert_index_bar(session, quote.board, bar, source)
     session.commit()
     cache.delete_prefix("market:")
     cache.delete_prefix("anomaly:")

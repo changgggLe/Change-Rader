@@ -17,7 +17,7 @@ OPENAPI_TAGS = [
     {"name": "市场", "description": "交易时段、行情更新时间及数据源健康状态。"},
     {"name": "异动", "description": "盘中预测、盘后系统计算和历史异动榜单。所有结果均不代表交易所确认。"},
     {"name": "证券", "description": "单只股票的基础信息、基准指数及偏离值计算明细。"},
-    {"name": "自选", "description": "当前用户的自选股票查询、添加和移除。阶段 1 暂存于进程内存。"},
+    {"name": "自选", "description": "当前用户的自选股票查询、添加和移除。数据持久化在数据库中。"},
     {"name": "提醒", "description": "单只股票的异动提醒开关。阶段 1 只保存设置，不发送微信消息。"},
 ]
 
@@ -53,7 +53,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         version="0.1.0",
         description=(
             "异动偏离预警器内部 MVP 的前后端接口契约。\n\n"
-            "当前阶段使用数据库演示行情完成持久化链路；本地默认 SQLite，部署环境使用 PostgreSQL 与 Redis。后续会接入真实行情适配器。\n\n"
+            "当前默认接入新浪财经公开网页候选行情；本地使用 SQLite，CloudBase 部署使用关系型数据库。首次真实行情同步期间会明确标注降级状态。\n\n"
             "**重要说明：所有异动状态均为系统按公开规则计算，不代表交易所最终认定，也不构成投资建议。**"
         ),
         openapi_tags=OPENAPI_TAGS,
@@ -85,12 +85,14 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         except Exception:
             database_status = "error"
         cache_status = "ok" if request.app.state.cache.health() else "error"
-        overall = "ok" if database_status == "ok" else "degraded"
+        market_sync_status = request.app.state.market_sync["status"]
+        overall = "ok" if database_status == "ok" and market_sync_status != "error" else "degraded"
         return {
             "status": overall,
             "service": "deviation-alert-api",
             "database": database_status,
             "cache": cache_status,
+            "market_sync": market_sync_status,
         }
 
     return application

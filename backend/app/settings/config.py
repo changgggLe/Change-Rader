@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     auto_create_tables: bool = False
     seed_demo_data: bool = True
     internal_user_key: str = "internal-demo"
+    wechat_appid: str | None = None
+    require_wechat_identity: bool = False
     market_data_provider: Literal["database_demo", "sina", "eastmoney"] = "sina"
     market_sync_interval_seconds: int = 15
     market_candidate_limit_per_board: int = 20

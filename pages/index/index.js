@@ -8,7 +8,7 @@ Page({
     marketSectionTitle: '异动结果',
     marketSectionHint: '正在判断交易时段',
     refreshLabel: '等待接口响应',
-    dataSourceLabel: '后端 Mock',
+    dataSourceLabel: '后端数据',
     loading: true,
     refreshing: false,
     loadError: '',
@@ -68,8 +68,9 @@ Page({
         const stocks = anomalies.items.map(this.adaptApiStock);
         const sourceLabels = {
           DATABASE_DEMO: '数据库演示数据',
-          PUBLIC_DATA_SYNCING: '真实行情首次同步中',
+          PUBLIC_DATA_SYNCING: '真实行情同步中（暂显演示数据）',
           SINA_PUBLIC_PARTIAL: '新浪财经真实行情（候选池）',
+          EASTMONEY_PUBLIC_PARTIAL: '东方财富真实行情（候选池）',
         };
         const sourceLabel = sourceLabels[market.source] || market.source;
         const trading = market.marketStatus === 'TRADING';
@@ -94,7 +95,7 @@ Page({
           stats: { triggered: 0, near: 0, severe: 0 },
           loading: false,
           refreshing: false,
-          loadError: '无法连接后端，请确认 FastAPI 已在 8000 端口启动',
+          loadError: '无法连接后端，请检查本地 FastAPI 或 CloudBase 云托管服务',
           marketState: '后端未连接',
           refreshLabel: '点击重试',
         });

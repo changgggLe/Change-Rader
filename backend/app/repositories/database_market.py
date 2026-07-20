@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.cache.service import CacheService
 from app.db.models import AlertSetting, AnomalyEvent, DailyQuote, IndexDailyQuote, SecurityMaster, Watchlist
 from app.market_data.engine import ReturnPoint, calculate_three_day, calculate_window
-from app.market_data.sync import is_trading_time, sync_watch_symbol
+from app.market_data.sync import active_market_source, is_trading_time, sync_watch_symbol
 from app.models.api import AnomalyItem, AnomalyListResponse, MarketStatusResponse, SecurityDetailResponse, WatchlistResponse
 from app.settings.config import Settings
 
@@ -27,7 +27,8 @@ class DatabaseMarketRepository:
         self.user_key = user_key
 
     def _real_data_ready(self) -> bool:
-        return bool(self.session.scalar(select(func.count()).select_from(DailyQuote).where(DailyQuote.source == "SINA_PUBLIC")))
+        source = active_market_source(self.settings)
+        return bool(self.session.scalar(select(func.count()).select_from(DailyQuote).where(DailyQuote.source == source)))
 
     def market_status(self) -> MarketStatusResponse:
         cache_key = "market:status"
@@ -37,7 +38,9 @@ class DatabaseMarketRepository:
         real_mode = self.settings.market_data_provider != "database_demo"
         ready = self._real_data_ready() if real_mode else False
         quote_time = (
-            self.session.scalar(select(func.max(DailyQuote.source_time)).where(DailyQuote.source == "SINA_PUBLIC"))
+            self.session.scalar(
+                select(func.max(DailyQuote.source_time)).where(DailyQuote.source == active_market_source(self.settings))
+            )
             if ready
             else self.session.scalar(select(func.max(AnomalyEvent.quote_time)))
         ) or datetime.now(SHANGHAI)
@@ -47,7 +50,9 @@ class DatabaseMarketRepository:
             market_status="TRADING" if trading else "CLOSED",
             quote_time=quote_time,
             data_health="DEGRADED" if real_mode else "HEALTHY",
-            source=("SINA_PUBLIC_PARTIAL" if ready else "PUBLIC_DATA_SYNCING") if real_mode else "DATABASE_DEMO",
+            source=(
+                f"{active_market_source(self.settings)}_PARTIAL" if ready else "PUBLIC_DATA_SYNCING"
+            ) if real_mode else "DATABASE_DEMO",
         )
         self.cache.set_json(cache_key, response.model_dump(mode="json", by_alias=True), 1)
         return response
@@ -59,17 +64,14 @@ class DatabaseMarketRepository:
             return AnomalyListResponse.model_validate(cached)
 
         real_mode = self.settings.market_data_provider != "database_demo"
-        if real_mode and not self._real_data_ready():
-            return AnomalyListResponse(
-                market_status="CLOSED" if mode == "AFTER_HOURS" else "TRADING",
-                quote_time=datetime.now(SHANGHAI),
-                data_health="DEGRADED",
-                mode=mode,
-                items=[],
-            )
+        real_data_ready = self._real_data_ready() if real_mode else False
         query = select(AnomalyEvent).options(joinedload(AnomalyEvent.security)).order_by(AnomalyEvent.quote_time.desc(), AnomalyEvent.id)
-        if real_mode:
+        if real_mode and real_data_ready:
             query = query.where(AnomalyEvent.data_health == "DEGRADED")
+        elif real_mode:
+            # CloudBase 冷启动后真实行情需要回填历史日线。同步完成前明确以降级状态展示种子数据，
+            # 避免首页长时间空白；真实数据落库后同步任务会删除这些演示事件。
+            query = query.where(AnomalyEvent.data_health == "HEALTHY")
         if mode != "HISTORY":
             query = query.where(AnomalyEvent.mode == mode)
         events = self.session.scalars(query).unique().all()
@@ -117,7 +119,7 @@ class DatabaseMarketRepository:
             self.session.scalar(
                 select(func.count()).select_from(DailyQuote).where(
                     DailyQuote.symbol == symbol,
-                    DailyQuote.source == "SINA_PUBLIC",
+                    DailyQuote.source == active_market_source(self.settings),
                 )
             )
         )
@@ -191,16 +193,17 @@ class DatabaseMarketRepository:
         )
 
     def _normal_item(self, security: SecurityMaster, watched: bool, alerted: bool) -> AnomalyItem | None:
+        source = active_market_source(self.settings)
         stock_rows = self.session.execute(
             select(DailyQuote.trade_date, DailyQuote.close_price, DailyQuote.change_percent)
-            .where(DailyQuote.symbol == security.symbol, DailyQuote.source == "SINA_PUBLIC")
+            .where(DailyQuote.symbol == security.symbol, DailyQuote.source == source)
             .order_by(DailyQuote.trade_date)
         ).all()
         index_rows = dict(
             self.session.execute(
                 select(IndexDailyQuote.trade_date, IndexDailyQuote.change_percent).where(
                     IndexDailyQuote.index_code == security.benchmark_code,
-                    IndexDailyQuote.source == "SINA_PUBLIC",
+                    IndexDailyQuote.source == source,
                 )
             ).all()
         )

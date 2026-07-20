@@ -22,7 +22,7 @@ class MarketStatusResponse(ApiModel):
     refresh_interval_seconds: int = Field(default=15, description="建议小程序轮询间隔，单位为秒")
     source: str = Field(
         default="DATABASE_DEMO",
-        description="数据源：SINA_PUBLIC_PARTIAL 为新浪财经真实行情候选池",
+        description="数据源：SINA_PUBLIC_PARTIAL 或 EASTMONEY_PUBLIC_PARTIAL 为真实行情候选池",
     )
 
 

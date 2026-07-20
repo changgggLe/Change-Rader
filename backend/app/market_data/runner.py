@@ -29,6 +29,8 @@ async def market_sync_loop(application: FastAPI) -> None:
         should_sync = trading or (closed_phase is not None and synced_closed_marker != closed_marker)
         if should_sync:
             try:
+                application.state.market_sync = {"status": "syncing", "result": None, "error": None}
+
                 def run_once():
                     with application.state.database.session_factory() as session:
                         return sync_market_data(session, application.state.cache, application.state.settings)

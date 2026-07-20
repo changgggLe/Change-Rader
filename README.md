@@ -60,7 +60,11 @@
 
 ## 下一阶段
 
-完整任务拆解见 [ROADMAP.md](ROADMAP.md)。当前已完成 FastAPI、SQLAlchemy、Alembic 和缓存层，小程序接口数据来自持久化数据库。开发环境默认使用 SQLite，Docker 部署使用 PostgreSQL 16 和 Redis 7。
+完整任务拆解见 [ROADMAP.md](ROADMAP.md)。当前已完成 FastAPI、SQLAlchemy、Alembic 和缓存层，小程序接口数据来自持久化数据库。开发环境默认使用 SQLite，Docker Compose 使用 PostgreSQL 16 和 Redis 7。
+
+CloudBase 内部 MVP 上线采用“云托管 FastAPI + CloudBase MySQL + `wx.cloud.callContainer`”
+架构，暂不单独部署 Redis。完整配置、环境变量、安全收口和验证步骤见
+[CLOUDBASE_DEPLOY.md](CLOUDBASE_DEPLOY.md)。
 
 ## 启动后端接口
 
@@ -82,11 +86,13 @@ python -m venv .venv
 
 微信开发者工具继续导入仓库根目录。小程序默认访问 `http://127.0.0.1:8000/api/v1`；配置位于 `config/env.js`。页面股票、统计、详情、自选和提醒状态均以后端数据库接口为准；后端未启动时页面会明确显示连接失败。
 
-首次打开小程序时，前端会生成匿名设备用户标识并保存到微信本地存储，请求通过 `X-User-Key` 传给后端。自选和提醒记录按该标识隔离；这满足内部 MVP 的用户级数据隔离，但不等同于微信身份认证，正式内部发布仍需接入 `code2Session`。
+本地开发时，前端会生成匿名设备用户标识并通过 `X-User-Key` 传给后端。CloudBase 上线后，
+小程序改用 `wx.cloud.callContainer`，平台自动注入 `X-WX-OPENID`；后端优先按 OpenID 隔离
+自选和提醒数据，不再需要单独调用 `code2Session`。
 
 刷新策略：交易时间段每 15 秒轮询一次，每次请求均显示 Loading；非交易时间段不轮询行情。小程序会在下一个时间边界自动重新判断状态，用户不能手动切换。
 
-本地首次启动会生成 `backend/change_radar.db`，该文件已被 Git 忽略。后端启动后会在后台同步四个板块的真实候选行情；首次同步期间接口返回 `PUBLIC_DATA_SYNCING`，完成后返回 `SINA_PUBLIC_PARTIAL`。盘中每 15 秒更新实时快照，盘后每天只固化一次。自选和提醒设置在服务重启后仍保留。
+本地首次启动会生成 `backend/change_radar.db`，该文件已被 Git 忽略。后端启动后会在后台同步四个板块的真实候选行情；首次同步期间接口返回 `PUBLIC_DATA_SYNCING`，完成后返回 `SINA_PUBLIC_PARTIAL` 或 `EASTMONEY_PUBLIC_PARTIAL`。盘中每 15 秒更新实时快照，盘后每天只固化一次。自选和提醒设置在服务重启后仍保留。
 
 真实行情依赖公网访问。若电脑设置了不可用的系统代理，默认配置会绕过该代理直连新浪接口；可在 `.env` 中用 `MARKET_HTTP_USE_ENVIRONMENT_PROXY=true` 改回跟随系统代理。若只想运行离线接口测试，可设置 `MARKET_DATA_PROVIDER=database_demo`。
 
